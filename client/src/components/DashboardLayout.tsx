@@ -30,14 +30,20 @@ export default function DashboardLayout({
 
 function AdminLogin() {
   const { login } = useAuth();
-  const [password, setPassword] = useState(DEMO_PASSWORD);
-  const [visible, setVisible] = useState(true);
+  // If a real VITE_ADMIN_PASSWORD is set for this deployment, the demo
+  // password no longer works — don't pre-fill it or claim "any password
+  // works", or sign-in will look broken (see useAuth.ts).
+  const configured = import.meta.env.VITE_ADMIN_PASSWORD as string | undefined;
+  const isDemo = !configured || configured.length === 0;
+
+  const [password, setPassword] = useState(isDemo ? DEMO_PASSWORD : "");
+  const [visible, setVisible] = useState(isDemo);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const ok = login(password);
-    setError(ok ? null : "Enter a password to continue.");
+    setError(ok ? null : isDemo ? "Enter a password to continue." : "Incorrect password.");
   };
 
   return (
@@ -74,13 +80,15 @@ function AdminLogin() {
             <p>This dashboard is still in development — sign-in here is a placeholder, not real security.</p>
           </div>
 
-          <div className="adm-login-notice">
-            <ShieldAlert size={16} />
-            <span>
-              Demo mode: any password works. The field below is pre-filled with <b>{DEMO_PASSWORD}</b> so you can
-              just hit sign in.
-            </span>
-          </div>
+          {isDemo && (
+            <div className="adm-login-notice">
+              <ShieldAlert size={16} />
+              <span>
+                Demo mode: any password works. The field below is pre-filled with <b>{DEMO_PASSWORD}</b> so you can
+                just hit sign in.
+              </span>
+            </div>
+          )}
 
           <label className="adm-login-field">
             <span>Password</span>
