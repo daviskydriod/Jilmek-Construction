@@ -367,6 +367,7 @@
     display: flex; background: #fff; border-top: 1px solid #e3e9e4;
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
+  .adm-tabbar-brand { display: none; }
   .adm-tabbar button {
     flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
     padding: 9px 4px 10px; border: 0; background: none; cursor: pointer;
@@ -485,6 +486,12 @@
       width: 216px; height: 100vh; height: 100dvh; padding: 16px 12px;
       border-top: 0; border-right: 1px solid #e3e9e4; gap: 3px;
     }
+    .adm-tabbar-brand {
+      display: flex; align-items: center;
+      padding: 4px 10px 20px; margin-bottom: 8px;
+      border-bottom: 1px solid #e3e9e4;
+    }
+    .adm-tabbar-brand img { width: 128px; height: auto; }
     .adm-tabbar button {
       flex: 0 0 auto; flex-direction: row; align-items: center;
       justify-content: flex-start; gap: 11px; text-align: left;
