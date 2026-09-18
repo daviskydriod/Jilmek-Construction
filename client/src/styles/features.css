@@ -374,8 +374,9 @@
     color: #8b968f; font-size: 10.5px; font-weight: 700;
   }
   .adm-tabbar button.active { color: #1d7a56; }
-  /* Mobile keeps just the icon + label; the description is desktop-only. */
-  .adm-tab-text { display: contents; }
+  /* Mobile: icon only, no label — desktop gets the label + description back
+     below (min-width: 768px). */
+  .adm-tab-text { display: none; }
   .adm-tab-detail { display: none; }
   .adm-tab-count {
     display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 99px;
