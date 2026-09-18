@@ -300,7 +300,7 @@ function AdminDashboard() {
   const [listings, setListings] = useState<MockPropertyListing[]>(mockPropertyListings);
 
   if (!user) {
-    return null;
+    return <DashboardLayout>{null}</DashboardLayout>;
   }
 
   const isSaving = false;
