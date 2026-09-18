@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Lightweight client-only admin gate for the /admin dashboard.
@@ -9,6 +9,13 @@ import { useCallback, useState } from "react";
  * The demo password is shown right on the login screen rather than hidden,
  * and any non-empty value is accepted once a real VITE_ADMIN_PASSWORD isn't
  * set, so testing this never blocks anyone on the team.
+ *
+ * This is a tiny shared external store (not plain useState) on purpose:
+ * useAuth() is called from several places (DashboardLayout, AdminDashboard's
+ * topbar, etc). Plain useState would give each caller its own disconnected
+ * copy of "am I logged in", so logging out in one place wouldn't be seen by
+ * another — that's what caused the blank white screen after logout. Every
+ * caller now reads/writes the same value.
  *
  * Replace this with real PHP-backed authentication (sessions/JWT issued by
  * your PHP API) before this dashboard handles real client data.
@@ -30,8 +37,29 @@ function readStoredAuth(): boolean {
   }
 }
 
+let authed = readStoredAuth();
+const listeners = new Set<() => void>();
+
+function setAuthed(value: boolean) {
+  authed = value;
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot() {
+  return authed;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState(readStoredAuth);
+  const isAuthenticated = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const login = useCallback((password: string) => {
     const configured = import.meta.env.VITE_ADMIN_PASSWORD as string | undefined;
@@ -46,7 +74,7 @@ export function useAuth() {
         // sessionStorage unavailable (e.g. private browsing) — still allow
         // access for this render, it just won't persist across reloads.
       }
-      setIsAuthenticated(true);
+      setAuthed(true);
     }
     return ok;
   }, []);
@@ -57,7 +85,7 @@ export function useAuth() {
     } catch {
       // ignore
     }
-    setIsAuthenticated(false);
+    setAuthed(false);
   }, []);
 
   return {
