@@ -146,28 +146,29 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout>
       <div className="adm">
-        <header className="adm-topbar">
-          <div>
-            <p className="adm-kicker">JILMEK content studio</p>
-            <h1>{TABS.find((t) => t.id === tab)?.label}</h1>
-          </div>
-          <div className="adm-topbar-actions">
-            <Link href="/" className="adm-icon-btn" title="View public site">
-              <ExternalLink size={18} />
-            </Link>
-            <button className="adm-icon-btn" title="Log out" onClick={logout}>
-              <LogOut size={18} />
-            </button>
-          </div>
-        </header>
+        <div className="adm-main">
+          <header className="adm-topbar">
+            <div>
+              <p className="adm-kicker">JILMEK content studio</p>
+              <h1>{TABS.find((t) => t.id === tab)?.label}</h1>
+            </div>
+            <div className="adm-topbar-actions">
+              <Link href="/" className="adm-icon-btn" title="View public site">
+                <ExternalLink size={18} />
+              </Link>
+              <button className="adm-icon-btn" title="Log out" onClick={logout}>
+                <LogOut size={18} />
+              </button>
+            </div>
+          </header>
 
-        {!isLiveApi && (
-          <p className="adm-demo-banner">
-            Demo mode — saved in this browser only. Set <code>VITE_API_BASE_URL</code> to connect the PHP API.
-          </p>
-        )}
+          {!isLiveApi && (
+            <p className="adm-demo-banner">
+              Demo mode — saved in this browser only. Set <code>VITE_API_BASE_URL</code> to connect the PHP API.
+            </p>
+          )}
 
-        <div className="adm-body" ref={scrollRef}>
+          <div className="adm-body" ref={scrollRef}>
           {tab === "overview" && (
             <Overview
               products={products}
@@ -263,6 +264,7 @@ export default function AdminDashboard() {
               }}
             />
           )}
+          </div>
         </div>
 
         {/* B1: bottom tab bar on mobile, side rail on desktop.
