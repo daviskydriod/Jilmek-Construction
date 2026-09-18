@@ -49,7 +49,12 @@ function AdminLogin() {
         />
         <div className="adm-login-image-overlay" />
         <div className="adm-login-image-content">
-          <img className="adm-login-logo" src="/images/logo_22da56e1.png" alt="JILMEK Roofing & Construction Ltd" />
+          <img
+            className="adm-login-logo"
+            src="/images/logo_22da56e1.png"
+            alt="JILMEK Roofing & Construction Ltd"
+            style={{ width: 168, maxWidth: 168, height: "auto" }}
+          />
           <h2>Content studio</h2>
           <p>Manage roofing products, listings, photos and enquiries without touching code.</p>
         </div>
@@ -57,7 +62,12 @@ function AdminLogin() {
 
       <div className="adm-login-panel">
         <form onSubmit={handleSubmit} className="adm-login-form">
-          <img className="adm-login-logo adm-login-logo-mobile" src="/images/logo_22da56e1.png" alt="JILMEK Roofing & Construction Ltd" />
+          <img
+            className="adm-login-logo adm-login-logo-mobile"
+            src="/images/logo_22da56e1.png"
+            alt="JILMEK Roofing & Construction Ltd"
+            style={{ width: 120, maxWidth: 120, height: "auto" }}
+          />
 
           <div className="adm-login-heading">
             <h1>Sign in to continue</h1>
