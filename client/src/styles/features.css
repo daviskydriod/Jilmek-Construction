@@ -534,6 +534,10 @@
     width: 168px; max-width: 168px; height: auto;
     flex: 0 0 auto; object-fit: contain;
   }
+  /* Desktop-only: render the logo solid white over the hero photo.
+     :not(.adm-login-logo-mobile) keeps the mobile copy (shown below
+     900px, in its own natural colors) from being affected. */
+  .adm-login-logo:not(.adm-login-logo-mobile) { filter: brightness(0) invert(1); }
   .adm-login-logo-mobile { display: none; }
   .adm-login-image-content h2 {
     margin: 6px 0 0; font-family: "Barlow Condensed", sans-serif;
