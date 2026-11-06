@@ -32,6 +32,10 @@ export const API_CONTRACT = [
   "POST   /api/listings             create (admin)",
   "PUT    /api/listings/:id         update (admin)",
   "DELETE /api/listings/:id         delete (admin)",
+  "GET    /api/admin/projects      list all records (admin)",
+  "POST   /api/projects             create (admin)",
+  "PUT    /api/projects/:id         update (admin)",
+  "DELETE /api/projects/:id         archive (admin)",
   "GET    /api/media                list project images (admin)",
   "POST   /api/media                upload project image only (admin)",
   "DELETE /api/media/:key           delete (admin)",
@@ -112,6 +116,7 @@ const KEY = {
   testimonials: "jilmek.demo.testimonials",
   products: "jilmek.demo.products",
   listings: "jilmek.demo.listings",
+  projects: "jilmek.demo.projects",
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -318,10 +323,15 @@ export async function deleteListing(id: number): Promise<void> {
 }
 
 export type ProjectOption = { id: number; slug: string; title: string };
-export async function listProjectOptions(): Promise<ProjectOption[]> {
-  if (!isLiveApi) return [];
-  return (await request<any[]>("/projects")).map((item) => ({ id: Number(item.id), slug: String(item.slug), title: String(item.title) }));
-}
+export type CmsProjectStatus = "draft" | "published" | "archived";
+export type CmsProjectImage = {
+  id: number;
+  url: string;
+  alt_text: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+};
 export type CmsProject = {
   id: number;
   slug: string;
@@ -330,11 +340,72 @@ export type CmsProject = {
   summary: string | null;
   description: string | null;
   location: string | null;
-  images: { id: number; url: string; alt_text: string | null; caption: string | null; width: number | null; height: number | null }[];
+  status: CmsProjectStatus;
+  featured: boolean;
+  sortOrder: number;
+  coverMediaId: number | null;
+  coverImage: CmsProjectImage | null;
+  images: CmsProjectImage[];
 };
-export async function listCmsProjects(): Promise<CmsProject[]> {
-  if (!isLiveApi) return [];
-  return request<CmsProject[]>("/projects");
+export type CmsProjectInput = Omit<CmsProject, "id" | "coverMediaId" | "coverImage" | "images"> & { id?: number };
+
+function normalizeCmsProject(raw: any): CmsProject {
+  const image = (item: any): CmsProjectImage => ({
+    id: Number(item.id), url: String(item.url ?? ""), alt_text: item.alt_text ?? null,
+    caption: item.caption ?? null, width: item.width == null ? null : Number(item.width),
+    height: item.height == null ? null : Number(item.height),
+  });
+  return {
+    id: Number(raw.id), slug: String(raw.slug ?? ""), title: String(raw.title ?? ""),
+    category: String(raw.category ?? "Construction"), summary: raw.summary ?? null,
+    description: raw.description ?? null, location: raw.location ?? null,
+    status: (raw.status ?? "published") as CmsProjectStatus,
+    featured: Boolean(raw.featured ?? raw.is_featured),
+    sortOrder: Number(raw.sortOrder ?? raw.sort_order ?? 0),
+    coverMediaId: raw.coverMediaId == null && raw.cover_media_id == null ? null : Number(raw.coverMediaId ?? raw.cover_media_id),
+    coverImage: raw.coverImage ? image(raw.coverImage) : raw.cover_image ? image(raw.cover_image) : null,
+    images: Array.isArray(raw.images) ? raw.images.map(image) : [],
+  };
+}
+
+function projectPayload(project: CmsProjectInput) {
+  return {
+    slug: project.slug, title: project.title, category: project.category,
+    summary: project.summary || null, description: project.description || null,
+    location: project.location || null, status: project.status,
+    featured: project.featured, sort_order: project.sortOrder,
+  };
+}
+
+export async function listCmsProjects(admin = false): Promise<CmsProject[]> {
+  if (isLiveApi) return (await request<any[]>(admin ? "/admin/projects" : "/projects")).map(normalizeCmsProject);
+  const items = read<CmsProject[]>(KEY.projects, []);
+  return admin ? items : items.filter((item) => item.status === "published");
+}
+
+export async function saveCmsProject(input: CmsProjectInput): Promise<CmsProject> {
+  if (isLiveApi) {
+    const path = input.id ? `/projects/${input.id}` : "/projects";
+    return normalizeCmsProject(await request<any>(path, {
+      method: input.id ? "PUT" : "POST", body: JSON.stringify(projectPayload(input)),
+    }));
+  }
+  const current = read<CmsProject[]>(KEY.projects, []);
+  const old = current.find((item) => item.id === input.id);
+  const next = normalizeCmsProject({ ...input, id: input.id ?? Date.now(), images: old?.images ?? [] });
+  write(KEY.projects, input.id ? current.map((item) => item.id === input.id ? next : item) : [next, ...current]);
+  return next;
+}
+
+export async function archiveCmsProject(id: number): Promise<void> {
+  if (isLiveApi) { await request(`/projects/${id}`, { method: "DELETE" }); return; }
+  write(KEY.projects, read<CmsProject[]>(KEY.projects, []).map((item) => item.id === id ? { ...item, status: "archived" } : item));
+}
+
+export async function listProjectOptions(): Promise<ProjectOption[]> {
+  const projects = await listCmsProjects(true).catch(() => listCmsProjects());
+  return projects.filter((item) => item.status !== "archived")
+    .map((item) => ({ id: item.id, slug: item.slug, title: item.title }));
 }
 export async function attachProjectImage(slug: string, mediaId: number): Promise<void> {
   if (!isLiveApi) throw new Error("Project image attachment requires the live API.");

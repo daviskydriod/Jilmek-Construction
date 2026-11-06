@@ -6,7 +6,7 @@ import Lightbox from "@/components/Lightbox";
 import Testimonials from "@/components/Testimonials";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import ProjectDetail from "@/pages/ProjectDetail";
-import { createEnquiry, listCmsProjects, listListings, listProducts } from "@/lib/api";
+import { createEnquiry, listCmsProjects, listListings, listProducts, type CmsListing, type CmsProduct, type CmsProject } from "@/lib/api";
 import { initAnalytics, trackEvent, trackPageView } from "@/lib/analytics";
 import { galleryPhotos, galleryCategories, type GalleryCategory, type GalleryPhoto } from "@/lib/gallery";
 import { projectCaseStudies, photosFor } from "@/lib/projects";
@@ -168,13 +168,74 @@ function ButtonLink({ href, children, variant = "green" }: { href: string; child
   return <Link href={href} className={`button button-${variant}`}>{children}<ArrowRight size={16} /></Link>;
 }
 
+function FeaturedProductsShowcase({ products }: { products: CmsProduct[] }) {
+  const featured = products.filter((product) => product.isFeatured).slice(0, 3);
+  const items = (featured.length ? featured : products).slice(0, 3);
+  if (!items.length) return null;
+  return (
+    <section className="section-pad section-tint">
+      <div className="container">
+        <div className="projects-head">
+          <SectionHeading eyebrow="Roofing products" title="Roofing profiles available from JILMEK." body="Explore the roofing options currently shown in the JILMEK catalog." />
+          <ButtonLink href="/services#roofing" variant="outline">View full catalog</ButtonLink>
+        </div>
+        <div className="roofing-type-grid">
+          {items.map((product) => (
+            <article className="roofing-type-card" key={product.id}>
+              <img src={product.imageUrl || ASSETS.blueRoof} alt={`${product.name} roofing profile`} loading="lazy" />
+              <div>
+                <p className="eyebrow">{product.profile || "Roofing option"}</p>
+                <h3>{product.name}</h3>
+                <p>{product.description}</p>
+                <Link href="/services#roofing" className="text-link">Ask about this product <ArrowRight size={15} /></Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ListingsShowcase({ listings }: { listings: CmsListing[] }) {
+  if (!listings.length) return null;
+  return (
+    <section className="section-pad section-tint">
+      <div className="container">
+        <div className="projects-head">
+          <SectionHeading eyebrow="Current listings" title="Land and property opportunities." body="View the latest published listings, then contact JILMEK for confirmed details and next steps." />
+          <ButtonLink href="/contact#estimate" variant="outline">Ask about a listing</ButtonLink>
+        </div>
+        <div className="public-listing-grid">
+          {listings.slice(0, 6).map((listing) => (
+            <article className="public-listing-card" key={listing.id}>
+              <img src={listing.imageUrl || ASSETS.greyHouse} alt={listing.title} loading="lazy" />
+              <div className="public-listing-copy">
+                <div className="public-listing-meta"><span>{listing.listingType}</span><span>{listing.status}</span></div>
+                <h3>{listing.title}</h3>
+                <p className="public-listing-location">{listing.location}{listing.priceLabel ? ` · ${listing.priceLabel}` : ""}</p>
+                {listing.description && <p>{listing.description}</p>}
+                <Link href="/contact#estimate" className="text-link">Enquire about this listing <ArrowRight size={15} /></Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Home() {
   const [cmsListings, setCmsListings] = useState(mockPropertyListings.filter((listing) => listing.isPublished));
   const [cmsProducts, setCmsProducts] = useState(mockRoofingProducts.filter((product) => product.isPublished));
+  const [cmsProjects, setCmsProjects] = useState<CmsProject[]>([]);
   useEffect(() => {
     listListings().then(setCmsListings).catch(() => undefined);
     listProducts().then(setCmsProducts).catch(() => undefined);
+    listCmsProjects().then(setCmsProjects).catch(() => undefined);
   }, []);
+  const featuredProjects = cmsProjects.filter((project) => project.featured).slice(0, 3);
+  const homepageProjects = (featuredProjects.length ? featuredProjects : cmsProjects).slice(0, 3);
   useSeo({
     title: `${SITE.name} | Roofing & Construction in ${SITE.city}, Ghana`,
     description: "Roofing sheet supply and installation, building and construction, POP and finishing works, and real estate services. Free consultation and free estimate. Techiman, Ghana.",
@@ -193,17 +254,43 @@ function Home() {
 
     <section className="roofing-feature section-pad"><div className="container split-layout"><div className="split-image image-stack"><img className="main-image" src={ASSETS.blueRoof} alt="Modern blue roof supplied project" loading="lazy" /><div className="image-caption"><span>ROOFING SOLUTIONS</span><strong>Choose the profile that fits your project.</strong></div></div><div className="split-copy"><p className="section-number">03 — Roofing solutions</p><SectionHeading eyebrow="Modern roofing solutions" title="A roof that looks right, feels considered and is installed with care." body="We supply and install different types of modern roofing sheets, together with the accessories and installation services required to complete your roofing project." /><div className="type-list">{(cmsProducts.length ? cmsProducts.slice(0, 4).map((product) => product.name) : roofingTypes.slice(0, 4).map(([name]) => name)).map((name) => <span key={name}><CircleCheck size={16} /> {name}</span>)}</div><ButtonLink href="/services#roofing">Explore roofing services</ButtonLink></div></div></section>
 
+    <FeaturedProductsShowcase products={cmsProducts} />
+
     <section className="comparison-section section-pad"><div className="container"><SectionHeading eyebrow="04 — Make an informed choice" title="Choosing the right roofing material" body="A clear starting point for the conversation. We can help you consider the look, use and budget of your project." align="center" /><div className="comparison-grid"><div className="material-card material-aluminium"><div><p className="eyebrow">Option A</p><h3>Aluminium</h3></div><ul><li>Pure aluminium</li><li>Does not rust</li><li>Very lightweight</li><li>Long-lasting</li><li>Higher cost</li></ul><span className="material-mark">01</span></div><div className="material-card material-msl"><div><p className="eyebrow">Option B</p><h3>MSL / Aluzinc</h3></div><ul><li>Iron + zinc + aluminium coating</li><li>Strong</li><li>Good quality</li><li>Moderate price</li><li>May rust after many years</li></ul><span className="material-mark">02</span></div></div><div className="center-button"><ButtonLink href="/contact#estimate" variant="gold">Talk to us about your roofing project</ButtonLink></div></div></section>
 
     <section className="construction-feature section-pad section-charcoal"><div className="container split-layout split-reverse"><div className="split-copy light-copy"><p className="section-number">05 — Construction</p><SectionHeading light eyebrow="From foundation to finishing" title="Build with a team that sees the whole project." body="JILMEK provides general building and construction services for clients looking to develop their projects from foundation through finishing." /><div className="check-grid">{["Building from foundation to finishing", "POP ceiling works", "Tiling works", "Tinted glass works", "Trusses & woodworks", "General finishing works"].map((item) => <span key={item}><CircleCheck size={17} /> {item}</span>)}</div><ButtonLink href="/services#construction" variant="green">View construction services</ButtonLink></div><div className="split-image"><img className="main-image" src={ASSETS.frame} alt="JILMEK construction project photo" loading="lazy" /><div className="dark-image-note"><HardHat size={18} /><span>Practical guidance from first conversation to final detail.</span></div></div></div></section>
 
-    <section className="real-estate-section section-pad"><div className="container"><div className="real-estate-head"><div><p className="section-number">06 — Real estate</p><SectionHeading eyebrow="Real estate services" title="More ways to move a property project forward." body="Beyond construction, JILMEK provides services for clients looking to buy, sell or develop land and property." /></div><img src={ASSETS.tallHouse} alt="Residential property supplied project" loading="lazy" /></div><div className="real-estate-grid"><div><span>01</span><h3>Buy & sell land</h3><p>Enquire about land opportunities and the next steps for a property decision.</p><Link href="/contact#estimate" className="text-link">Enquire about land <ArrowRight size={15} /></Link></div><div><span>02</span><h3>Property sales</h3><p>We help clients sell their houses, buildings and other properties.</p><Link href="/contact#estimate" className="text-link">Sell your property <ArrowRight size={15} /></Link></div><div><span>03</span><h3>Build on your land</h3><p>Have your own land? We can help turn it into a completed building project.</p><Link href="/contact#estimate" className="text-link">Start your project <ArrowRight size={15} /></Link></div>{cmsListings.slice(0, 3).map((listing) => <div key={listing.id}><span>CMS / {listing.listingType}</span><h3>{listing.title}</h3><p>{listing.location}{listing.priceLabel ? ` · ${listing.priceLabel}` : ""}</p><Link href="/contact#estimate" className="text-link">Enquire about listing <ArrowRight size={15} /></Link></div>)}</div></div></section>
+    <section className="real-estate-section section-pad"><div className="container"><div className="real-estate-head"><div><p className="section-number">06 — Real estate</p><SectionHeading eyebrow="Real estate services" title="More ways to move a property project forward." body="Beyond construction, JILMEK provides services for clients looking to buy, sell or develop land and property." /></div><img src={ASSETS.tallHouse} alt="Residential property supplied project" loading="lazy" /></div><div className="real-estate-grid"><div><span>01</span><h3>Buy & sell land</h3><p>Enquire about land opportunities and the next steps for a property decision.</p><Link href="/contact#estimate" className="text-link">Enquire about land <ArrowRight size={15} /></Link></div><div><span>02</span><h3>Property sales</h3><p>We help clients sell their houses, buildings and other properties.</p><Link href="/contact#estimate" className="text-link">Sell your property <ArrowRight size={15} /></Link></div><div><span>03</span><h3>Build on your land</h3><p>Have your own land? We can help turn it into a completed building project.</p><Link href="/contact#estimate" className="text-link">Start your project <ArrowRight size={15} /></Link></div></div></div></section>
+
+    <ListingsShowcase listings={cmsListings} />
 
     <section className="why-section section-pad section-tint"><div className="container why-layout"><div><p className="section-number">07 — Why JILMEK</p><SectionHeading eyebrow="A clear, grounded proposition" title="Professional help without the guesswork." body="The information on this website is designed to help you start a useful conversation — not to make claims we cannot substantiate." /><ButtonLink href="/about" variant="outline">More about the company</ButtonLink></div><div className="why-list">{[["01", "Roofing expertise", "Supply and installation of multiple roofing sheet options."], ["02", "Complete construction", "From structural construction through finishing."], ["03", "Multiple service areas", "Projects across all 16 regions of Ghana and outside Ghana."], ["04", "Free consultation", "Get professional guidance before starting your project."], ["05", "Free estimate", "Request a quotation for your project."]].map(([num, title, body]) => <div key={num}><span>{num}</span><div><h3>{title}</h3><p>{body}</p></div></div>)}</div></div></section>
 
     <section className="coverage-section section-pad"><div className="container coverage-card"><div className="coverage-copy"><p className="section-number">08 — Project coverage</p><SectionHeading light eyebrow="Serving clients across Ghana" title="Based in Techiman. Ready for projects beyond." body="JILMEK undertakes roofing, building and finishing projects across all 16 regions of Ghana and beyond." /><div className="coverage-meta"><span><MapPin size={18} /> Main office: Techiman, Bono East Region</span><span><ShieldCheck size={18} /> Service coverage: all 16 regions + beyond</span></div></div><div className="coverage-project-image"><img src={ASSETS.brickHome} alt="Completed JILMEK building project" loading="lazy" /><p>One home base. A wider reach.</p></div></div></section>
 
-    <section className="projects-preview section-pad section-tint"><div className="container"><div className="projects-head"><SectionHeading eyebrow="09 — Our work" title="A look at supplied project photography." body="Actual JILMEK project images will keep growing as more work is documented." /><ButtonLink href="/projects" variant="outline">View all projects</ButtonLink></div><div className="project-mosaic"><Link href="/projects" className="project-tile large"><img src={ASSETS.hero} alt="Supplied JILMEK roofing project" loading="lazy" /><div><span>Roofing</span><h3>Roofline character, built with intent.</h3></div></Link><Link href="/projects" className="project-tile"><img src={ASSETS.colonnade} alt="Supplied JILMEK construction project" loading="lazy" /><div><span>Construction</span><h3>Structure and frontage.</h3></div></Link><Link href="/projects" className="project-tile"><img src={ASSETS.greyHouse} alt="Supplied JILMEK residential project" loading="lazy" /><div><span>Residential</span><h3>Homes taking shape.</h3></div></Link></div></div></section>
+    <section className="projects-preview section-pad section-tint">
+      <div className="container">
+        <div className="projects-head">
+          <SectionHeading eyebrow="09 — Our work" title={homepageProjects.length ? "Recent JILMEK projects." : "A look at supplied project photography."} body={homepageProjects.length ? "Explore current published project details and photos from JILMEK." : "Actual JILMEK project images will keep growing as more work is documented."} />
+          <ButtonLink href="/projects" variant="outline">View all projects</ButtonLink>
+        </div>
+        <div className="project-mosaic">
+          {homepageProjects.length > 0 ? homepageProjects.map((project, index) => {
+            const cover = project.coverImage ?? project.images[0];
+            return (
+              <Link key={project.slug} href={`/projects/${project.slug}`} className={`project-tile ${index === 0 ? "large" : ""}`}>
+                <img src={cover?.url ?? ASSETS.blueRoof} alt={cover?.alt_text ?? project.title} loading="lazy" />
+                <div><span>{project.category}</span><h3>{project.title}</h3></div>
+              </Link>
+            );
+          }) : <>
+            <Link href="/projects" className="project-tile large"><img src={ASSETS.hero} alt="Supplied JILMEK roofing project" loading="lazy" /><div><span>Roofing</span><h3>Roofline character, built with intent.</h3></div></Link>
+            <Link href="/projects" className="project-tile"><img src={ASSETS.colonnade} alt="Supplied JILMEK construction project" loading="lazy" /><div><span>Construction</span><h3>Structure and frontage.</h3></div></Link>
+            <Link href="/projects" className="project-tile"><img src={ASSETS.greyHouse} alt="Supplied JILMEK residential project" loading="lazy" /><div><span>Residential</span><h3>Homes taking shape.</h3></div></Link>
+          </>}
+        </div>
+      </div>
+    </section>
 
     <Testimonials />
 
@@ -233,8 +320,10 @@ function About() {
 
 function Services() {
   const [cmsProducts, setCmsProducts] = useState(mockRoofingProducts.filter((product) => product.isPublished));
+  const [cmsListings, setCmsListings] = useState(mockPropertyListings.filter((listing) => listing.isPublished));
   useEffect(() => {
     listProducts().then(setCmsProducts).catch(() => undefined);
+    listListings().then(setCmsListings).catch(() => undefined);
   }, []);
   useSeo({
     title: "Services — roofing sheets, construction, POP & finishing",
@@ -250,6 +339,8 @@ function Services() {
     <section id="construction" className="section-pad section-charcoal"><div className="container"><SectionHeading light eyebrow="04 — Construction" title="Building from foundation to finishing." body="General building and construction services for clients looking to develop their projects from foundation through finishing." /><div className="dark-service-grid">{[["General building", "Building from foundation to finishing.", ASSETS.frame], ["POP ceiling works", "Considered ceiling details for finished interiors.", ASSETS.colonnade], ["Tiling works", "Hard-wearing surfaces and clean finishing decisions.", ASSETS.greyHouse], ["Tinted glass works", "Glass details that shape the way a space feels.", ASSETS.tallHouse], ["Trusses & woodworks", "The supporting structure and crafted details.", ASSETS.roofFrame], ["Finishing works", "The final layer that completes the project.", ASSETS.pinkRoof]].map(([title, body, image]) => <div key={title} className="dark-service-card"><img src={image} alt={title} loading="lazy" /><div><h3>{title}</h3><p>{body}</p><Link href="/contact#estimate" className="text-link">Enquire now <ArrowRight size={15} /></Link></div></div>)}</div></div></section>
     <section id="finishing" className="section-pad section-tint"><div className="container split-layout"><div><p className="section-number">05 — Finishing</p><SectionHeading eyebrow="Finishing services" title="The work after the structure is what makes it yours." body="Bring together POP ceilings, tiling, tinted glass, trusses, woodworks and general finishing works through one clear scope." /><ButtonLink href="/contact#estimate">Discuss finishing works</ButtonLink></div><div className="split-image"><img className="main-image" src={ASSETS.colonnade} alt="Supplied project finishing detail" loading="lazy" /></div></div></section>
     <section id="real-estate" className="section-pad"><div className="container"><SectionHeading eyebrow="06 — Real estate" title="Land, property and building support." body="Beyond construction, JILMEK provides services for clients looking to buy, sell or develop land and property." align="center" /><div className="estate-service-grid"><div><span>01</span><h3>Land — Buy & Sell</h3><p>Information about available land opportunities can be added as the company provides it.</p><ButtonLink href="/contact#estimate" variant="outline">Enquire about land</ButtonLink></div><div><span>02</span><h3>Property sales</h3><p>We help clients sell their houses, buildings and properties.</p><ButtonLink href="/contact#estimate" variant="outline">Sell your property</ButtonLink></div><div><span>03</span><h3>Build on your own land</h3><p>Have your own land? We can help turn it into a completed building project.</p><ButtonLink href="/contact#estimate" variant="outline">Start your project</ButtonLink></div></div></div></section>
+    <ListingsShowcase listings={cmsListings} />
+
     <section className="section-pad section-tint"><div className="container process-section"><div><p className="section-number">07 — How it works</p><SectionHeading eyebrow="A simple four-step process" title="Start with a conversation. Build from there." body="The exact scope will depend on your project. This is the straightforward path we use to begin." /></div><div className="process-list">{[["01", "Consultation", "Discuss your project requirements."], ["02", "Assessment", "Review the work and material requirements."], ["03", "Estimate", "Receive a project quotation."], ["04", "Work", "Proceed with the agreed roofing, construction or property work."]].map(([num, title, body]) => <div key={num}><span>{num}</span><div><h3>{title}</h3><p>{body}</p></div></div>)}</div></div></section>
     <section className="section-pad"><div className="container faq-mini"><SectionHeading eyebrow="08 — Common questions" title="A few useful starting points." body="Need more detail? Ask us directly and we will guide the next step." /><div className="faq-list"><FaqItem question="What roofing sheets do you supply?" answer="Long Span, Self-Lock, IBR, IDT, Euro Tiles / Aero Tiles and Stone Coated Shingles." /><FaqItem question="Do you offer estimates and consultations?" answer="Yes. Free consultations and free estimates / quotations are available." /><FaqItem question="Do you work outside Techiman?" answer="Yes. The company states that it undertakes projects across all 16 regions of Ghana and outside Ghana." /></div></div></section>
     <section className="cta-section section-pad"><div className="container cta-card"><div><p className="eyebrow">Take the next step</p><h2>Need a quote or a clearer starting point?</h2><p>Tell JILMEK what you are planning and we will help you shape the conversation.</p></div><ButtonLink href="/contact#estimate" variant="gold">Get free estimate</ButtonLink></div></section>
@@ -295,7 +386,20 @@ function Projects() {
           <SectionHeading eyebrow="01 — Case studies" title="Project sets, grouped by the work involved." body="Each set collects photographs from the same kind of job, with a short account of what was actually done." />
         </div>
         <div className="case-study-grid">
-          {projectCaseStudies.map((project) => {
+          {apiProjects.length > 0 ? apiProjects.map((project) => {
+            const cover = project.coverImage ?? project.images[0];
+            return (
+              <Link key={project.slug} href={`/projects/${project.slug}`} className="case-study-card">
+                <img src={cover?.url ?? ASSETS.roofFrame} alt={cover?.alt_text ?? project.title} loading="lazy" />
+                <div>
+                  <span className="case-study-category">{project.category}</span>
+                  <h3>{project.title}</h3>
+                  <p>{project.summary || project.description}</p>
+                  <span className="text-link">View project <ArrowRight size={15} /></span>
+                </div>
+              </Link>
+            );
+          }) : projectCaseStudies.map((project) => {
             const cover = photosFor(project)[0];
             return (
               <Link key={project.slug} href={`/projects/${project.slug}`} className="case-study-card">

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ExternalLink,
+  FolderOpen,
   Image as ImageIcon,
   Inbox,
   Landmark,
@@ -28,15 +29,18 @@ import {
 } from "@/lib/mockCms";
 import {
   attachProjectImage,
+  archiveCmsProject,
   deleteListing,
   deleteEnquiry,
   deleteMedia,
   deleteProduct,
   deleteTestimonial,
   Enquiry,
+  CmsProject,
   isLiveApi,
   listEnquiries,
   listListings,
+  listCmsProjects,
   listMedia,
   listProducts,
   listProjectOptions,
@@ -44,6 +48,7 @@ import {
   MediaItem,
   removeProjectImage,
   saveListing,
+  saveCmsProject,
   saveProduct,
   saveTestimonial,
   Testimonial,
@@ -53,7 +58,7 @@ import {
 
 /* -------------------------------------------------------------------- types */
 
-type Tab = "overview" | "products" | "listings" | "media" | "enquiries";
+type Tab = "overview" | "products" | "listings" | "projects" | "media" | "enquiries";
 
 type ProductForm = {
   name: string;
@@ -79,6 +84,18 @@ type ListingForm = {
   isFeatured: boolean;
 };
 
+type ProjectForm = {
+  slug: string;
+  title: string;
+  category: string;
+  summary: string;
+  description: string;
+  location: string;
+  status: CmsProject["status"];
+  featured: boolean;
+  sortOrder: number;
+};
+
 const emptyProduct: ProductForm = {
   name: "", profile: "", description: "", imageUrl: "", imageKey: "",
   isPublished: true, isFeatured: false, sortOrder: 0,
@@ -89,12 +106,18 @@ const emptyListing: ListingForm = {
   description: "", imageUrl: "", imageKey: "", isPublished: true, isFeatured: false,
 };
 
+const emptyProject: ProjectForm = {
+  slug: "", title: "", category: "Roofing", summary: "", description: "", location: "",
+  status: "draft", featured: false, sortOrder: 0,
+};
+
 const emptyTestimonial = { author: "", role: "", quote: "", isPublished: true };
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard; detail: string }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, detail: "Counts & quick actions" },
   { id: "products", label: "Products", icon: PackageOpen, detail: "Roofing catalog" },
   { id: "listings", label: "Listings", icon: Landmark, detail: "Land & property" },
+  { id: "projects", label: "Projects", icon: FolderOpen, detail: "Project details" },
   { id: "media", label: "Media", icon: ImageIcon, detail: "Photo library" },
   { id: "enquiries", label: "Enquiries", icon: Inbox, detail: "Leads & testimonials" },
 ];
@@ -111,32 +134,57 @@ export default function AdminDashboard() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [projects, setProjects] = useState<CmsProject[]>([]);
+  const [projectManagementAvailable, setProjectManagementAvailable] = useState(!isLiveApi);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardLoadError, setDashboardLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Full-screen editor state (B3) — null means "list view".
   const [editor, setEditor] = useState<
     | { type: "product"; id: number | null; form: ProductForm }
     | { type: "listing"; id: number | null; form: ListingForm }
+    | { type: "project"; id: number | null; form: ProjectForm }
     | { type: "testimonial"; id: number | null; form: typeof emptyTestimonial }
     | null
   >(null);
   const [openEnquiry, setOpenEnquiry] = useState<Enquiry | null>(null);
 
   const refresh = useCallback(async () => {
-    const [m, e, t, p, l] = await Promise.all([
+    const [m, e, t, p, l, projectRecords] = await Promise.all([
       listMedia(), listEnquiries(), listTestimonials(), listProducts(true), listListings(true),
+      listCmsProjects(true).catch(() => null),
     ]);
     setMedia(m);
     setEnquiries(e);
     setTestimonials(t);
     setProducts(p);
     setListings(l);
+    setProjects(projectRecords ?? []);
+    setProjectManagementAvailable(projectRecords !== null);
   }, []);
 
   useEffect(() => {
-    refresh().catch(() => toast.error("Could not load dashboard data."));
-  }, [refresh]);
+    if (!user) return;
+    let active = true;
+    setDashboardLoading(true);
+    setDashboardLoadError(false);
+    refresh()
+      .catch(() => { if (active) setDashboardLoadError(true); })
+      .finally(() => { if (active) setDashboardLoading(false); });
+    return () => { active = false; };
+  }, [refresh, user, reloadKey]);
 
   if (!user) return <DashboardLayout>{null}</DashboardLayout>;
+  if (dashboardLoading) return <DashboardLayout><div className="adm-loading">Loading dashboard data…</div></DashboardLayout>;
+  if (dashboardLoadError) return (
+    <DashboardLayout>
+      <div className="adm-loading" role="alert">
+        <p>Dashboard data couldn’t be loaded. Please try again.</p>
+        <button className="adm-primary" onClick={() => setReloadKey((key) => key + 1)}>Try again</button>
+      </div>
+    </DashboardLayout>
+  );
 
   const unread = enquiries.filter((item) => item.status === "New").length;
 
@@ -144,6 +192,7 @@ export default function AdminDashboard() {
     overview: null,
     products: products.length,
     listings: listings.length,
+    projects: projects.length,
     media: media.length,
     enquiries: enquiries.length,
   };
@@ -186,6 +235,7 @@ export default function AdminDashboard() {
             <Overview
               products={products}
               listings={listings}
+              projects={projects}
               media={media}
               enquiries={enquiries}
               onGo={selectTab}
@@ -244,6 +294,34 @@ export default function AdminDashboard() {
                   toast.success("Listing removed.");
                 } catch (error) {
                   toast.error(error instanceof Error ? error.message : "Could not delete listing.");
+                }
+              }}
+            />
+          )}
+
+          {tab === "projects" && (
+            <ProjectsTab
+              projects={projects}
+              apiAvailable={projectManagementAvailable}
+              onNew={() => setEditor({ type: "project", id: null, form: emptyProject })}
+              onEdit={(project) => setEditor({
+                type: "project",
+                id: project.id,
+                form: {
+                  slug: project.slug, title: project.title, category: project.category,
+                  summary: project.summary ?? "", description: project.description ?? "",
+                  location: project.location ?? "", status: project.status,
+                  featured: project.featured, sortOrder: project.sortOrder,
+                },
+              })}
+              onArchive={async (project) => {
+                if (!window.confirm(`Archive ${project.title}? It will no longer appear publicly.`)) return;
+                try {
+                  await archiveCmsProject(project.id);
+                  setProjects((items) => items.map((item) => item.id === project.id ? { ...item, status: "archived" } : item));
+                  toast.success("Project archived.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not archive project.");
                 }
               }}
             />
@@ -405,6 +483,49 @@ export default function AdminDashboard() {
         </FullScreenForm>
       )}
 
+      {editor?.type === "project" && (
+        <FullScreenForm
+          title={editor.id ? "Edit project" : "New project"}
+          onClose={() => setEditor(null)}
+          onSubmit={async () => {
+            try {
+              const next = await saveCmsProject({ ...editor.form, id: editor.id ?? undefined });
+              setProjects((items) => editor.id ? items.map((item) => item.id === editor.id ? next : item) : [next, ...items]);
+              setEditor(null);
+              toast.success(editor.id ? "Project updated." : "Project created.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not save project.");
+            }
+          }}
+        >
+          <Field label="Project title" required value={editor.form.title}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, title: v } })}
+            placeholder="e.g. Blue roof installation" />
+          <Field label="URL slug" required value={editor.form.slug}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, slug: v.toLowerCase().trim().replace(/[^a-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "") } })}
+            placeholder="blue-roof-installation" />
+          <Select label="Category" value={editor.form.category}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, category: v } })}
+            options={[["Roofing", "Roofing"], ["Construction", "Construction"], ["Finishing", "Finishing"], ["Real estate", "Real estate"]]} />
+          <Field label="Location" value={editor.form.location}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, location: v } })}
+            placeholder="Use confirmed town or region details" />
+          <TextArea label="Short summary" value={editor.form.summary}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, summary: v } })}
+            placeholder="A short introduction shown on project cards." />
+          <TextArea label="Project description" value={editor.form.description}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, description: v } })}
+            placeholder="Describe the work accurately. Use blank lines to separate paragraphs." />
+          <Select label="Visibility" value={editor.form.status}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, status: v as ProjectForm["status"] } })}
+            options={[["draft", "Draft"], ["published", "Published"], ["archived", "Archived"]]} />
+          <Field label="Sort order" type="number" value={String(editor.form.sortOrder)}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, sortOrder: Math.max(0, Number(v) || 0) } })} />
+          <Check label="Feature this project" checked={editor.form.featured}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, featured: v } })} />
+        </FullScreenForm>
+      )}
+
       {editor?.type === "testimonial" && (
         <FullScreenForm
           title={editor.id ? "Edit testimonial" : "New testimonial"}
@@ -464,10 +585,11 @@ export default function AdminDashboard() {
 /* ================================================================= sections */
 
 function Overview({
-  products, listings, media, enquiries, onGo,
+  products, listings, projects, media, enquiries, onGo,
 }: {
   products: MockRoofingProduct[];
   listings: MockPropertyListing[];
+  projects: CmsProject[];
   media: MediaItem[];
   enquiries: Enquiry[];
   onGo: (tab: Tab) => void;
@@ -475,6 +597,7 @@ function Overview({
   const stats = [
     { label: "Roofing products", value: products.length, sub: `${products.filter((p) => p.isPublished).length} published`, tab: "products" as Tab },
     { label: "Property listings", value: listings.length, sub: `${listings.filter((l) => l.isPublished).length} published`, tab: "listings" as Tab },
+    { label: "Projects", value: projects.length, sub: `${projects.filter((p) => p.status === "published").length} published`, tab: "projects" as Tab },
     { label: "Media files", value: media.length, sub: "In the library", tab: "media" as Tab },
     { label: "New enquiries", value: enquiries.filter((e) => e.status === "New").length, sub: `${enquiries.length} total`, tab: "enquiries" as Tab },
   ];
@@ -597,6 +720,55 @@ function ListingsTab({
               <div className="adm-record-actions">
                 <button onClick={() => onEdit(l)}>Edit</button>
                 <button className="danger" onClick={() => onDelete(l)} aria-label={`Delete ${l.title}`}><Trash2 size={15} /></button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ProjectsTab({
+  projects, apiAvailable, onNew, onEdit, onArchive,
+}: {
+  projects: CmsProject[];
+  apiAvailable: boolean;
+  onNew: () => void;
+  onEdit: (project: CmsProject) => void;
+  onArchive: (project: CmsProject) => void;
+}) {
+  return (
+    <div className="adm-section">
+      <div className="adm-section-head">
+        <p>Manage project titles, descriptions, locations, visibility and featured order.</p>
+        <button className="adm-primary" onClick={onNew} disabled={!apiAvailable}><Plus size={16} /> New project</button>
+      </div>
+      {!apiAvailable && (
+        <p className="adm-demo-banner">Project settings need the latest API package to be uploaded. The rest of the dashboard will keep working.</p>
+      )}
+      {projects.length === 0 ? (
+        <Empty icon={<FolderOpen size={30} />} title="No projects yet" body={apiAvailable ? "Add a project to create a public case study and attach photos from the Media tab." : "Upload the updated API package to enable project management."} />
+      ) : (
+        <ul className="adm-records">
+          {projects.map((project) => (
+            <li key={project.id}>
+              <div className="adm-record-thumb">
+                {project.coverImage?.url || project.images[0]?.url
+                  ? <img src={project.coverImage?.url ?? project.images[0]?.url} alt="" loading="lazy" />
+                  : <FolderOpen size={20} />}
+              </div>
+              <div className="adm-record-main">
+                <div className="adm-pills">
+                  <span className={`adm-pill ${project.status === "published" ? "green" : ""}`}>{project.status}</span>
+                  {project.featured && <span className="adm-pill gold">Featured</span>}
+                </div>
+                <h3>{project.title}</h3>
+                <p>{project.category}{project.location ? ` · ${project.location}` : ""}</p>
+              </div>
+              <div className="adm-record-actions">
+                <button onClick={() => onEdit(project)}>Edit</button>
+                {project.status !== "archived" && <button className="danger" onClick={() => onArchive(project)} aria-label={`Archive ${project.title}`}><Trash2 size={15} /></button>}
               </div>
             </li>
           ))}
