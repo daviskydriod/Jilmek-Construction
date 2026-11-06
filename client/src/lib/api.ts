@@ -12,6 +12,8 @@
  * bypassed.
  */
 
+import { mockPropertyListings, mockRoofingProducts } from "./mockCms";
+
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 export const isLiveApi = API_BASE.length > 0;
 
@@ -20,16 +22,18 @@ export const API_CONTRACT = [
   "GET    /api/enquiries         list (admin)",
   "PATCH  /api/enquiries/:id     update status (admin)",
   "DELETE /api/enquiries/:id     remove (admin)",
-  "GET    /api/products             list",
+  "GET    /api/products             list published records",
+  "GET    /api/admin/products       list all records (admin)",
   "POST   /api/products             create (admin)",
   "PUT    /api/products/:id         update (admin)",
   "DELETE /api/products/:id         delete (admin)",
-  "GET    /api/listings             list",
+  "GET    /api/listings             list published records",
+  "GET    /api/admin/listings       list all records (admin)",
   "POST   /api/listings             create (admin)",
   "PUT    /api/listings/:id         update (admin)",
   "DELETE /api/listings/:id         delete (admin)",
-  "GET    /api/media                list uploaded files (admin)",
-  "POST   /api/media                multipart upload -> { url, key } (admin)",
+  "GET    /api/media                list project images (admin)",
+  "POST   /api/media                upload project image only (admin)",
   "DELETE /api/media/:key           delete (admin)",
   "POST   /api/auth/login        { email, password } -> JWT",
   "GET    /api/auth/me           current admin or 401",
@@ -53,11 +57,13 @@ export type Enquiry = {
 };
 
 export type MediaItem = {
+  id?: number;
   key: string;
   url: string;
   filename: string;
   sizeKb: number;
   uploadedAt: string;
+  projectSlugs?: string[];
 };
 
 export type Testimonial = {
@@ -66,6 +72,32 @@ export type Testimonial = {
   role: string;
   quote: string;
   isPublished: boolean;
+};
+
+export type CmsProduct = {
+  id: number;
+  name: string;
+  profile: string;
+  description: string;
+  imageUrl: string;
+  imageKey: string | null;
+  isPublished: boolean;
+  isFeatured: boolean;
+  sortOrder: number;
+};
+
+export type CmsListing = {
+  id: number;
+  title: string;
+  listingType: "land" | "property" | "development";
+  location: string;
+  priceLabel: string | null;
+  status: "available" | "reserved" | "sold" | "draft";
+  description: string;
+  imageUrl: string;
+  imageKey: string | null;
+  isPublished: boolean;
+  isFeatured: boolean;
 };
 
 export type EnquiryInput = Omit<Enquiry, "id" | "status" | "isRead" | "createdAt">;
@@ -78,6 +110,8 @@ const KEY = {
   enquiries: "jilmek.demo.enquiries",
   media: "jilmek.demo.media",
   testimonials: "jilmek.demo.testimonials",
+  products: "jilmek.demo.products",
+  listings: "jilmek.demo.listings",
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -189,10 +223,15 @@ export async function listEnquiries(): Promise<Enquiry[]> {
 
 export async function updateEnquiry(id: number, patch: Partial<Enquiry>): Promise<Enquiry> {
   if (isLiveApi) {
-    if (!patch.status) return { ...(read<Enquiry[]>(KEY.enquiries, []).find((item) => item.id === id) ?? { id, name: "", phone: "", email: "", location: "", service: "", message: "", preferred: "Phone", status: "New" as const, isRead: false, createdAt: new Date().toISOString() }), ...patch };
-    const statusMap: Record<Enquiry["status"], string> = { New: "new", Contacted: "contacted", Closed: "closed" };
-    const result = await request<any>(`/enquiries/${id}`, { method: "PATCH", body: JSON.stringify({ status: statusMap[patch.status] }) });
-    return normalizeEnquiry({ ...result, id, status: patch.status });
+    const body: { status?: string; is_read?: boolean } = {};
+    if (patch.status) {
+      const statusMap: Record<Enquiry["status"], string> = { New: "new", Contacted: "contacted", Closed: "closed" };
+      body.status = statusMap[patch.status];
+    }
+    if (patch.isRead !== undefined) body.is_read = patch.isRead;
+    const result = await request<any>(`/enquiries/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+    const cached = read<Enquiry[]>(KEY.enquiries, []).find((item) => item.id === id);
+    return normalizeEnquiry({ ...cached, ...result, id, status: patch.status ?? result.status ?? cached?.status, is_read: patch.isRead ?? result.is_read ?? cached?.isRead });
   }
   const list = read<Enquiry[]>(KEY.enquiries, []);
   const next = list.map((item) => (item.id === id ? { ...item, ...patch } : item));
@@ -205,7 +244,107 @@ export async function deleteEnquiry(id: number): Promise<void> {
     await request(`/enquiries/${id}`, { method: "DELETE" });
     return;
   }
-  write(KEY.enquiries, read<Enquiry[]>(KEY.enquiries, []).filter((item) => item.id !== id));
+  write<Enquiry[]>(KEY.enquiries, read<Enquiry[]>(KEY.enquiries, []).filter((item) => item.id !== id));
+}
+
+function normalizeProduct(raw: any): CmsProduct {
+  return {
+    id: Number(raw.id), name: raw.name ?? "", profile: raw.profile ?? "", description: raw.description ?? "",
+    imageUrl: raw.imageUrl ?? raw.image_url ?? "", imageKey: raw.imageKey ?? raw.image_key ?? null,
+    isPublished: Boolean(raw.isPublished ?? raw.is_published), isFeatured: Boolean(raw.isFeatured ?? raw.is_featured),
+    sortOrder: Number(raw.sortOrder ?? raw.sort_order ?? 0),
+  };
+}
+
+function normalizeListing(raw: any): CmsListing {
+  return {
+    id: Number(raw.id), title: raw.title ?? "", listingType: raw.listingType ?? raw.listing_type ?? "property",
+    location: raw.location ?? "", priceLabel: raw.priceLabel ?? raw.price_label ?? null,
+    status: raw.status ?? "available", description: raw.description ?? "", imageUrl: raw.imageUrl ?? raw.image_url ?? "",
+    imageKey: raw.imageKey ?? raw.image_key ?? null, isPublished: Boolean(raw.isPublished ?? raw.is_published),
+    isFeatured: Boolean(raw.isFeatured ?? raw.is_featured),
+  };
+}
+
+function productPayload(product: Omit<CmsProduct, "id">) {
+  return { name: product.name, profile: product.profile, description: product.description, image_url: product.imageUrl || null,
+    image_key: product.imageKey || null, is_published: product.isPublished, is_featured: product.isFeatured, sort_order: product.sortOrder };
+}
+
+function listingPayload(listing: Omit<CmsListing, "id">) {
+  return { title: listing.title, listing_type: listing.listingType, location: listing.location, price_label: listing.priceLabel || null,
+    status: listing.status, description: listing.description, image_url: listing.imageUrl || null, image_key: listing.imageKey || null,
+    is_published: listing.isPublished, is_featured: listing.isFeatured };
+}
+
+export async function listProducts(admin = false): Promise<CmsProduct[]> {
+  if (isLiveApi) return (await request<any[]>(admin ? "/admin/products" : "/products")).map(normalizeProduct);
+  const items = read<CmsProduct[]>(KEY.products, mockRoofingProducts.map(normalizeProduct));
+  return admin ? items : items.filter((item) => item.isPublished);
+}
+
+export async function saveProduct(input: Omit<CmsProduct, "id"> & { id?: number }): Promise<CmsProduct> {
+  const body = JSON.stringify(productPayload(input));
+  if (isLiveApi) return normalizeProduct(await request<any>(input.id ? `/products/${input.id}` : "/products", { method: input.id ? "PUT" : "POST", body }));
+  const current = read<CmsProduct[]>(KEY.products, mockRoofingProducts.map(normalizeProduct));
+  const next = normalizeProduct({ ...input, id: input.id ?? Date.now() });
+  write(KEY.products, input.id ? current.map((item) => item.id === input.id ? next : item) : [next, ...current]);
+  return next;
+}
+
+export async function deleteProduct(id: number): Promise<void> {
+  if (isLiveApi) { await request(`/products/${id}`, { method: "DELETE" }); return; }
+  write(KEY.products, read<CmsProduct[]>(KEY.products, mockRoofingProducts.map(normalizeProduct)).filter((item) => item.id !== id));
+}
+
+export async function listListings(admin = false): Promise<CmsListing[]> {
+  if (isLiveApi) return (await request<any[]>(admin ? "/admin/listings" : "/listings")).map(normalizeListing);
+  const items = read<CmsListing[]>(KEY.listings, mockPropertyListings.map(normalizeListing));
+  return admin ? items : items.filter((item) => item.isPublished && item.status !== "draft");
+}
+
+export async function saveListing(input: Omit<CmsListing, "id"> & { id?: number }): Promise<CmsListing> {
+  const body = JSON.stringify(listingPayload(input));
+  if (isLiveApi) return normalizeListing(await request<any>(input.id ? `/listings/${input.id}` : "/listings", { method: input.id ? "PUT" : "POST", body }));
+  const current = read<CmsListing[]>(KEY.listings, mockPropertyListings.map(normalizeListing));
+  const next = normalizeListing({ ...input, id: input.id ?? Date.now() });
+  write(KEY.listings, input.id ? current.map((item) => item.id === input.id ? next : item) : [next, ...current]);
+  return next;
+}
+
+export async function deleteListing(id: number): Promise<void> {
+  if (isLiveApi) { await request(`/listings/${id}`, { method: "DELETE" }); return; }
+  write(KEY.listings, read<CmsListing[]>(KEY.listings, mockPropertyListings.map(normalizeListing)).filter((item) => item.id !== id));
+}
+
+export type ProjectOption = { id: number; slug: string; title: string };
+export async function listProjectOptions(): Promise<ProjectOption[]> {
+  if (!isLiveApi) return [];
+  return (await request<any[]>("/projects")).map((item) => ({ id: Number(item.id), slug: String(item.slug), title: String(item.title) }));
+}
+export type CmsProject = {
+  id: number;
+  slug: string;
+  title: string;
+  category: string;
+  summary: string | null;
+  description: string | null;
+  location: string | null;
+  images: { id: number; url: string; alt_text: string | null; caption: string | null; width: number | null; height: number | null }[];
+};
+export async function listCmsProjects(): Promise<CmsProject[]> {
+  if (!isLiveApi) return [];
+  return request<CmsProject[]>("/projects");
+}
+export async function attachProjectImage(slug: string, mediaId: number): Promise<void> {
+  if (!isLiveApi) throw new Error("Project image attachment requires the live API.");
+  await request(`/projects/${encodeURIComponent(slug)}/images`, {
+    method: "POST", body: JSON.stringify({ media_id: mediaId, sort_order: 0, is_cover: false }),
+  });
+}
+export async function removeProjectImage(slug: string, mediaId: number): Promise<void> {
+  if (!isLiveApi) throw new Error("Project image detachment requires the live API.");
+  await request(`/projects/${encodeURIComponent(slug)}/images/${mediaId}`, { method: "DELETE" });
 }
 
 /* ------------------------------------------------------------------ media */

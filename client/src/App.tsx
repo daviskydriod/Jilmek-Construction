@@ -6,9 +6,9 @@ import Lightbox from "@/components/Lightbox";
 import Testimonials from "@/components/Testimonials";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import ProjectDetail from "@/pages/ProjectDetail";
-import { createEnquiry } from "@/lib/api";
+import { createEnquiry, listCmsProjects, listListings, listProducts } from "@/lib/api";
 import { initAnalytics, trackEvent, trackPageView } from "@/lib/analytics";
-import { galleryPhotos, galleryCategories } from "@/lib/gallery";
+import { galleryPhotos, galleryCategories, type GalleryCategory, type GalleryPhoto } from "@/lib/gallery";
 import { projectCaseStudies, photosFor } from "@/lib/projects";
 import { injectLocalBusinessSchema, useSeo } from "@/lib/seo";
 import { PHONES, SITE, whatsappLink, DEFAULT_WHATSAPP_MESSAGE } from "@/lib/site";
@@ -169,7 +169,12 @@ function ButtonLink({ href, children, variant = "green" }: { href: string; child
 }
 
 function Home() {
-  const cmsListings = mockPropertyListings.filter((listing) => listing.isPublished);
+  const [cmsListings, setCmsListings] = useState(mockPropertyListings.filter((listing) => listing.isPublished));
+  const [cmsProducts, setCmsProducts] = useState(mockRoofingProducts.filter((product) => product.isPublished));
+  useEffect(() => {
+    listListings().then(setCmsListings).catch(() => undefined);
+    listProducts().then(setCmsProducts).catch(() => undefined);
+  }, []);
   useSeo({
     title: `${SITE.name} | Roofing & Construction in ${SITE.city}, Ghana`,
     description: "Roofing sheet supply and installation, building and construction, POP and finishing works, and real estate services. Free consultation and free estimate. Techiman, Ghana.",
@@ -186,7 +191,7 @@ function Home() {
 
     <section className="service-overview section-pad section-tint"><div className="container"><SectionHeading eyebrow="02 — What we do" title="One trusted team. Four ways to move forward." body="A focused service mix for clients who want to build with confidence and talk to people who understand the work." align="center" /><div className="service-grid">{serviceCards.map(({ icon: Icon, eyebrow, title, body, image }) => <Link href={title.includes("Roofing") ? "/services#roofing" : title.includes("Construction") ? "/services#construction" : title.includes("Finishing") ? "/services#finishing" : "/services#real-estate"} className="service-card" key={title}><div className="service-card-image"><img src={image} alt={title} loading="lazy" /><span className="service-icon"><Icon size={21} /></span></div><div className="service-card-copy"><p className="eyebrow">{eyebrow}</p><h3>{title}</h3><p>{body}</p><span className="text-link">Explore service <ArrowRight size={15} /></span></div></Link>)}</div></div></section>
 
-    <section className="roofing-feature section-pad"><div className="container split-layout"><div className="split-image image-stack"><img className="main-image" src={ASSETS.blueRoof} alt="Modern blue roof supplied project" loading="lazy" /><div className="image-caption"><span>ROOFING SOLUTIONS</span><strong>Choose the profile that fits your project.</strong></div></div><div className="split-copy"><p className="section-number">03 — Roofing solutions</p><SectionHeading eyebrow="Modern roofing solutions" title="A roof that looks right, feels considered and is installed with care." body="We supply and install different types of modern roofing sheets, together with the accessories and installation services required to complete your roofing project." /><div className="type-list">{roofingTypes.slice(0, 4).map(([name]) => <span key={name}><CircleCheck size={16} /> {name}</span>)}</div><ButtonLink href="/services#roofing">Explore roofing services</ButtonLink></div></div></section>
+    <section className="roofing-feature section-pad"><div className="container split-layout"><div className="split-image image-stack"><img className="main-image" src={ASSETS.blueRoof} alt="Modern blue roof supplied project" loading="lazy" /><div className="image-caption"><span>ROOFING SOLUTIONS</span><strong>Choose the profile that fits your project.</strong></div></div><div className="split-copy"><p className="section-number">03 — Roofing solutions</p><SectionHeading eyebrow="Modern roofing solutions" title="A roof that looks right, feels considered and is installed with care." body="We supply and install different types of modern roofing sheets, together with the accessories and installation services required to complete your roofing project." /><div className="type-list">{(cmsProducts.length ? cmsProducts.slice(0, 4).map((product) => product.name) : roofingTypes.slice(0, 4).map(([name]) => name)).map((name) => <span key={name}><CircleCheck size={16} /> {name}</span>)}</div><ButtonLink href="/services#roofing">Explore roofing services</ButtonLink></div></div></section>
 
     <section className="comparison-section section-pad"><div className="container"><SectionHeading eyebrow="04 — Make an informed choice" title="Choosing the right roofing material" body="A clear starting point for the conversation. We can help you consider the look, use and budget of your project." align="center" /><div className="comparison-grid"><div className="material-card material-aluminium"><div><p className="eyebrow">Option A</p><h3>Aluminium</h3></div><ul><li>Pure aluminium</li><li>Does not rust</li><li>Very lightweight</li><li>Long-lasting</li><li>Higher cost</li></ul><span className="material-mark">01</span></div><div className="material-card material-msl"><div><p className="eyebrow">Option B</p><h3>MSL / Aluzinc</h3></div><ul><li>Iron + zinc + aluminium coating</li><li>Strong</li><li>Good quality</li><li>Moderate price</li><li>May rust after many years</li></ul><span className="material-mark">02</span></div></div><div className="center-button"><ButtonLink href="/contact#estimate" variant="gold">Talk to us about your roofing project</ButtonLink></div></div></section>
 
@@ -227,12 +232,15 @@ function About() {
 }
 
 function Services() {
+  const [cmsProducts, setCmsProducts] = useState(mockRoofingProducts.filter((product) => product.isPublished));
+  useEffect(() => {
+    listProducts().then(setCmsProducts).catch(() => undefined);
+  }, []);
   useSeo({
     title: "Services — roofing sheets, construction, POP & finishing",
     description: "Long Span, Self-Lock, IBR, IDT, Euro Tiles and Stone Coated Shingles supply and installation, plus general building, POP ceilings, tiling, tinted glass and real estate services.",
     path: "/services",
   });
-  const cmsProducts = mockRoofingProducts.filter((product) => product.isPublished);
   const displayRoofingTypes = cmsProducts.length ? cmsProducts.map((product) => [product.name, product.description, product.imageUrl || ASSETS.blueRoof]) : roofingTypes;
   return <>
     <PageHero kicker="Services" title="The right service for the next step." body="Roofing, building, finishing and property services for projects in Ghana and beyond." image={ASSETS.blueRoof}><ButtonLink href="/contact#estimate" variant="gold">Request a free estimate</ButtonLink></PageHero>
@@ -256,19 +264,30 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 function Projects() {
   const [filter, setFilter] = useState<string>("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [apiProjects, setApiProjects] = useState<Awaited<ReturnType<typeof listCmsProjects>>>([]);
+  useEffect(() => {
+    listCmsProjects().then(setApiProjects).catch(() => undefined);
+  }, []);
+  const apiPhotos: GalleryPhoto[] = apiProjects.flatMap((project) => project.images.map((image) => ({
+    slug: `${project.slug}-${image.id}`,
+    category: (["Roofing", "Construction", "Finishing", "Real estate"].includes(project.category) ? project.category : "Construction") as GalleryCategory,
+    alt: image.alt_text || project.title,
+    src: image.url,
+    thumb: image.url,
+  })));
+  const displayPhotos = apiPhotos.length > 0 ? apiPhotos : galleryPhotos;
+  const filtered = filter === "All" ? displayPhotos : displayPhotos.filter((item) => item.category === filter);
 
   useSeo({
     title: "Projects & gallery — roofing and construction work in Ghana",
     description:
       "Browse JILMEK roofing, construction and finishing projects: timber truss frames, roof installations, completed residences and two-storey builds across Ghana.",
     path: "/projects",
-    image: galleryPhotos[0]?.src,
+    image: displayPhotos[0]?.src,
   });
 
-  const filtered = filter === "All" ? galleryPhotos : galleryPhotos.filter((item) => item.category === filter);
-
   return <>
-    <PageHero kicker="Projects / Gallery" title="Work you can see. Delivery you can trust." body={`${galleryPhotos.length} photographs from JILMEK project sites, from structure and roofing to finished details.`} image={ASSETS.roofFrame}><ButtonLink href="/contact#estimate" variant="gold">Request a similar estimate</ButtonLink></PageHero>
+    <PageHero kicker="Projects / Gallery" title="Work you can see. Delivery you can trust." body={`${displayPhotos.length} photographs from JILMEK project sites, from structure and roofing to finished details.`} image={ASSETS.roofFrame}><ButtonLink href="/contact#estimate" variant="gold">Request a similar estimate</ButtonLink></PageHero>
 
     <section className="section-pad">
       <div className="container">
@@ -304,7 +323,7 @@ function Projects() {
           {galleryCategories.map((option) => (
             <button key={option} className={filter === option ? "active" : ""} onClick={() => { setFilter(option); setLightboxIndex(null); }} role="tab" aria-selected={filter === option}>
               {option}
-              <small>{option === "All" ? galleryPhotos.length : galleryPhotos.filter((p) => p.category === option).length}</small>
+              <small>{option === "All" ? displayPhotos.length : displayPhotos.filter((p) => p.category === option).length}</small>
             </button>
           ))}
         </div>

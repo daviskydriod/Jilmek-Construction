@@ -27,15 +27,24 @@ import {
   MockRoofingProduct,
 } from "@/lib/mockCms";
 import {
+  attachProjectImage,
+  deleteListing,
   deleteEnquiry,
   deleteMedia,
+  deleteProduct,
   deleteTestimonial,
   Enquiry,
   isLiveApi,
   listEnquiries,
+  listListings,
   listMedia,
+  listProducts,
+  listProjectOptions,
   listTestimonials,
   MediaItem,
+  removeProjectImage,
+  saveListing,
+  saveProduct,
   saveTestimonial,
   Testimonial,
   updateEnquiry,
@@ -110,14 +119,17 @@ export default function AdminDashboard() {
     | { type: "testimonial"; id: number | null; form: typeof emptyTestimonial }
     | null
   >(null);
-  const [picker, setPicker] = useState<null | ((url: string, key: string) => void)>(null);
   const [openEnquiry, setOpenEnquiry] = useState<Enquiry | null>(null);
 
   const refresh = useCallback(async () => {
-    const [m, e, t] = await Promise.all([listMedia(), listEnquiries(), listTestimonials()]);
+    const [m, e, t, p, l] = await Promise.all([
+      listMedia(), listEnquiries(), listTestimonials(), listProducts(true), listListings(true),
+    ]);
     setMedia(m);
     setEnquiries(e);
     setTestimonials(t);
+    setProducts(p);
+    setListings(l);
   }, []);
 
   useEffect(() => {
@@ -195,10 +207,15 @@ export default function AdminDashboard() {
                   },
                 })
               }
-              onDelete={(p) => {
+              onDelete={async (p) => {
                 if (!window.confirm(`Delete ${p.name}?`)) return;
-                setProducts((items) => items.filter((i) => i.id !== p.id));
-                toast.success("Product removed.");
+                try {
+                  await deleteProduct(p.id);
+                  setProducts((items) => items.filter((i) => i.id !== p.id));
+                  toast.success("Product removed.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not delete product.");
+                }
               }}
             />
           )}
@@ -219,10 +236,15 @@ export default function AdminDashboard() {
                   },
                 })
               }
-              onDelete={(l) => {
+              onDelete={async (l) => {
                 if (!window.confirm(`Delete ${l.title}?`)) return;
-                setListings((items) => items.filter((i) => i.id !== l.id));
-                toast.success("Listing removed.");
+                try {
+                  await deleteListing(l.id);
+                  setListings((items) => items.filter((i) => i.id !== l.id));
+                  toast.success("Listing removed.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not delete listing.");
+                }
               }}
             />
           )}
@@ -230,8 +252,6 @@ export default function AdminDashboard() {
           {tab === "media" && (
             <MediaTab
               media={media}
-              products={products}
-              listings={listings}
               onChange={refresh}
             />
           )}
@@ -243,8 +263,13 @@ export default function AdminDashboard() {
               onOpen={async (enquiry) => {
                 setOpenEnquiry(enquiry);
                 if (!enquiry.isRead) {
-                  await updateEnquiry(enquiry.id, { isRead: true });
-                  refresh();
+                  try {
+                    const updated = await updateEnquiry(enquiry.id, { isRead: true });
+                    setOpenEnquiry(updated);
+                    await refresh();
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Could not mark enquiry as read.");
+                  }
                 }
               }}
               onNewTestimonial={() =>
@@ -305,17 +330,15 @@ export default function AdminDashboard() {
         <FullScreenForm
           title={editor.id ? "Edit product" : "New product"}
           onClose={() => setEditor(null)}
-          onSubmit={() => {
-            const next = {
-              ...editor.form,
-              imageKey: editor.form.imageKey || null,
-              id: editor.id ?? Date.now(),
-            } as MockRoofingProduct;
-            setProducts((items) =>
-              editor.id ? items.map((i) => (i.id === editor.id ? next : i)) : [next, ...items],
-            );
-            setEditor(null);
-            toast.success(editor.id ? "Product updated." : "Product created.");
+          onSubmit={async () => {
+            try {
+              const next = await saveProduct({ ...editor.form, imageKey: editor.form.imageKey || null, id: editor.id ?? undefined });
+              setProducts((items) => editor.id ? items.map((i) => (i.id === editor.id ? next : i)) : [next, ...items]);
+              setEditor(null);
+              toast.success(editor.id ? "Product updated." : "Product created.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not save product.");
+            }
           }}
         >
           <Field label="Product name" required value={editor.form.name}
@@ -327,15 +350,9 @@ export default function AdminDashboard() {
           <TextArea label="Description" required value={editor.form.description}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, description: v } })}
             placeholder="A clear, factual description for customers." />
-          <ImagePickerField
-            value={editor.form.imageUrl}
-            onPick={() =>
-              setPicker(() => (url: string, key: string) =>
-                setEditor((e) => (e && e.type === "product" ? { ...e, form: { ...e.form, imageUrl: url, imageKey: key } } : e)),
-              )
-            }
-            onClear={() => setEditor({ ...editor, form: { ...editor.form, imageUrl: "", imageKey: "" } })}
-          />
+          <Field label="Static site image path" value={editor.form.imageUrl}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, imageUrl: v, imageKey: "" } })}
+            placeholder="/images/hero-red-roof_78e57ca6.jpeg" />
           <Field label="Sort order" type="number" value={String(editor.form.sortOrder)}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, sortOrder: Number(v) || 0 } })} />
           <Check label="Published on website" checked={editor.form.isPublished}
@@ -349,18 +366,15 @@ export default function AdminDashboard() {
         <FullScreenForm
           title={editor.id ? "Edit listing" : "New listing"}
           onClose={() => setEditor(null)}
-          onSubmit={() => {
-            const next = {
-              ...editor.form,
-              priceLabel: editor.form.priceLabel || null,
-              imageKey: editor.form.imageKey || null,
-              id: editor.id ?? Date.now(),
-            } as MockPropertyListing;
-            setListings((items) =>
-              editor.id ? items.map((i) => (i.id === editor.id ? next : i)) : [next, ...items],
-            );
-            setEditor(null);
-            toast.success(editor.id ? "Listing updated." : "Listing created.");
+          onSubmit={async () => {
+            try {
+              const next = await saveListing({ ...editor.form, priceLabel: editor.form.priceLabel || null, imageKey: editor.form.imageKey || null, id: editor.id ?? undefined });
+              setListings((items) => editor.id ? items.map((i) => (i.id === editor.id ? next : i)) : [next, ...items]);
+              setEditor(null);
+              toast.success(editor.id ? "Listing updated." : "Listing created.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not save listing.");
+            }
           }}
         >
           <Field label="Listing title" required value={editor.form.title}
@@ -381,15 +395,9 @@ export default function AdminDashboard() {
           <TextArea label="Description" required value={editor.form.description}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, description: v } })}
             placeholder="A clear, factual description for the listing." />
-          <ImagePickerField
-            value={editor.form.imageUrl}
-            onPick={() =>
-              setPicker(() => (url: string, key: string) =>
-                setEditor((e) => (e && e.type === "listing" ? { ...e, form: { ...e.form, imageUrl: url, imageKey: key } } : e)),
-              )
-            }
-            onClear={() => setEditor({ ...editor, form: { ...editor.form, imageUrl: "", imageKey: "" } })}
-          />
+          <Field label="Static site image path" value={editor.form.imageUrl}
+            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, imageUrl: v, imageKey: "" } })}
+            placeholder="/images/house-grey_2ed75e58.jpeg" />
           <Check label="Published on website" checked={editor.form.isPublished}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, isPublished: v } })} />
           <Check label="Mark as featured" checked={editor.form.isFeatured}
@@ -422,34 +430,30 @@ export default function AdminDashboard() {
         </FullScreenForm>
       )}
 
-      {/* B9: media picker instead of a free-text path field */}
-      {picker && (
-        <MediaPicker
-          media={media}
-          onClose={() => setPicker(null)}
-          onSelect={(item) => {
-            picker(item.url, item.key);
-            setPicker(null);
-          }}
-          onUploaded={refresh}
-        />
-      )}
-
       {openEnquiry && (
         <EnquiryDetail
           enquiry={openEnquiry}
           onClose={() => setOpenEnquiry(null)}
           onStatus={async (status) => {
-            await updateEnquiry(openEnquiry.id, { status });
-            setOpenEnquiry({ ...openEnquiry, status });
-            refresh();
+            try {
+              const updated = await updateEnquiry(openEnquiry.id, { status });
+              setOpenEnquiry(updated);
+              await refresh();
+              toast.success("Enquiry updated.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not update enquiry.");
+            }
           }}
           onDelete={async () => {
             if (!window.confirm("Delete this enquiry?")) return;
-            await deleteEnquiry(openEnquiry.id);
-            setOpenEnquiry(null);
-            refresh();
-            toast.success("Enquiry deleted.");
+            try {
+              await deleteEnquiry(openEnquiry.id);
+              setOpenEnquiry(null);
+              await refresh();
+              toast.success("Enquiry deleted.");
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "Could not delete enquiry.");
+            }
           }}
         />
       )}
@@ -604,38 +608,41 @@ function ListingsTab({
 
 /* --------------------------------------------------------------- media tab */
 
-function MediaTab({
-  media, products, listings, onChange,
-}: {
-  media: MediaItem[];
-  products: MockRoofingProduct[];
-  listings: MockPropertyListing[];
-  onChange: () => void;
-}) {
+function MediaTab({ media, onChange }: { media: MediaItem[]; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [projects, setProjects] = useState<{ id: number; slug: string; title: string }[]>([]);
+  const [projectSlug, setProjectSlug] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const usedBy = (item: MediaItem) => {
-    const names = [
-      ...products.filter((p) => p.imageUrl === item.url).map((p) => p.name),
-      ...listings.filter((l) => l.imageUrl === item.url).map((l) => l.title),
-    ];
-    return names;
-  };
+  useEffect(() => {
+    listProjectOptions().then((items) => {
+      setProjects(items);
+      setProjectSlug((current) => current || items[0]?.slug || "");
+    }).catch(() => toast.error("Could not load projects for image upload."));
+  }, []);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
+    if (!projectSlug) {
+      toast.error("Select an existing project before uploading project photos.");
+      return;
+    }
     setBusy(true);
     try {
+      let uploaded = 0;
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
-        await uploadMedia(file);
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) continue;
+        const item = await uploadMedia(file);
+        if (!item.id) throw new Error("The API did not return the uploaded image ID.");
+        await attachProjectImage(projectSlug, item.id);
+        uploaded += 1;
       }
       onChange();
-      toast.success(files.length > 1 ? `${files.length} images uploaded.` : "Image uploaded.");
-    } catch {
-      toast.error("Upload failed.");
+      if (uploaded === 0) toast.error("Choose JPEG, PNG, or WebP project photos.");
+      else toast.success(uploaded > 1 ? `${uploaded} project photos uploaded.` : "Project photo uploaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Project photo upload failed.");
     } finally {
       setBusy(false);
     }
@@ -643,6 +650,13 @@ function MediaTab({
 
   return (
     <div className="adm-section">
+      <label className="adm-field">
+        <span>Attach photos to project</span>
+        <select value={projectSlug} onChange={(event) => setProjectSlug(event.target.value)} disabled={projects.length === 0}>
+          {projects.length === 0 ? <option value="">No published projects available</option> : projects.map((project) => <option key={project.id} value={project.slug}>{project.title}</option>)}
+        </select>
+      </label>
+      <p>Only project photos are uploaded to the API. Product and listing imagery stays in the frontend’s static site assets.</p>
       <div
         className={`adm-drop ${dragging ? "is-dragging" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -651,51 +665,67 @@ function MediaTab({
         onClick={() => inputRef.current?.click()}
       >
         <Upload size={26} />
-        <strong>{busy ? "Uploading…" : "Upload photos"}</strong>
+        <strong>{busy ? "Uploading…" : "Upload project photos"}</strong>
         {/* `capture` is intentionally omitted so mobile offers camera AND gallery */}
         <span>Tap to choose from camera or gallery — or drag files here on desktop.</span>
         <input
           ref={inputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           hidden
+          disabled={busy || projects.length === 0}
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
         />
       </div>
 
       {media.length === 0 ? (
-        <Empty icon={<ImageIcon size={30} />} title="No images yet" body="Uploaded photos appear here and can be picked when editing a product or listing." />
+        <Empty icon={<ImageIcon size={30} />} title="No project photos yet" body="Upload photos to an existing project to make them available through the project-image API." />
       ) : (
         <ul className="adm-media-grid">
-          {media.map((item) => {
-            const used = usedBy(item);
-            return (
+          {media.map((item) => (
               <li key={item.key}>
                 <img src={item.url} alt={item.filename} loading="lazy" />
                 <div className="adm-media-meta">
                   <b title={item.filename}>{item.filename}</b>
                   <small>{item.sizeKb} KB · {new Date(item.uploadedAt).toLocaleDateString()}</small>
-                  {used.length > 0 && <span className="adm-used">In use: {used.join(", ")}</span>}
+                  {(item.projectSlugs?.length ?? 0) > 0 && <span className="adm-used">Projects: {item.projectSlugs?.join(", ")}</span>}
                 </div>
+                {item.id && projectSlug && item.projectSlugs?.includes(projectSlug) && (
+                  <button
+                    className="adm-secondary"
+                    onClick={async () => {
+                      const project = projects.find((entry) => entry.slug === projectSlug)?.title ?? projectSlug;
+                      if (!window.confirm(`Remove this photo from ${project}?`)) return;
+                      try {
+                        await removeProjectImage(projectSlug, item.id!);
+                        onChange();
+                        toast.success("Photo removed from project.");
+                      } catch (error) {
+                        toast.error(error instanceof Error ? error.message : "Could not remove photo from project.");
+                      }
+                    }}
+                  >Remove from selected project</button>
+                )}
                 <button
                   className="adm-media-delete"
                   aria-label={`Delete ${item.filename}`}
+                  disabled={(item.projectSlugs?.length ?? 0) > 0}
                   onClick={async () => {
-                    const warning = used.length
-                      ? `${item.filename} is used by: ${used.join(", ")}.\n\nDelete anyway?`
-                      : `Delete ${item.filename}?`;
-                    if (!window.confirm(warning)) return;
-                    await deleteMedia(item.key);
-                    onChange();
-                    toast.success("Image deleted.");
+                    if (!window.confirm(`Delete unlinked project photo ${item.filename}?`)) return;
+                    try {
+                      await deleteMedia(item.key);
+                      onChange();
+                      toast.success("Project photo deleted.");
+                    } catch (error) {
+                      toast.error(error instanceof Error ? error.message : "Could not delete project photo.");
+                    }
                   }}
                 >
                   <Trash2 size={15} />
                 </button>
               </li>
-            );
-          })}
+          ))}
         </ul>
       )}
     </div>
