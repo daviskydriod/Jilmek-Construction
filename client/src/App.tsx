@@ -6,6 +6,7 @@ import Lightbox from "@/components/Lightbox";
 import Testimonials from "@/components/Testimonials";
 import WhatsAppFab from "@/components/WhatsAppFab";
 import ProjectDetail from "@/pages/ProjectDetail";
+import { ListingCatalog, ListingDetail, ProductCatalog, ProductDetail } from "@/pages/CatalogPages";
 import { createEnquiry, listCmsProjects, listListings, listProducts, type CmsListing, type CmsProduct, type CmsProject } from "@/lib/api";
 import { initAnalytics, trackEvent, trackPageView } from "@/lib/analytics";
 import { galleryPhotos, galleryCategories, type GalleryCategory, type GalleryPhoto } from "@/lib/gallery";
@@ -143,7 +144,7 @@ function Footer() {
         <p>Everything About Construction.</p>
         <p className="footer-note">Professional roofing, building, finishing and real estate services from Techiman, Ghana.</p>
       </div>
-      <div><p className="footer-label">Explore</p><div className="footer-links">{navItems.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}</div></div>
+      <div><p className="footer-label">Explore</p><div className="footer-links">{navItems.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}<Link href="/roofing-products">Roofing products</Link><Link href="/listings">Land & property listings</Link></div></div>
       <div><p className="footer-label">Services</p><div className="footer-links"><Link href="/services#roofing">Roofing</Link><Link href="/services#construction">Building & Construction</Link><Link href="/services#finishing">POP & Finishing</Link><Link href="/services#real-estate">Real Estate</Link></div></div>
       <div><p className="footer-label">Contact</p><div className="footer-contact"><span><MapPin size={15} /> Techiman, Bono East Region</span>{phones.map((phone) => <a href={`tel:${phone}`} key={phone}><Phone size={15} /> {phone}</a>)}<span className="footer-coverage"><ShieldCheck size={15} /> Ghana & beyond</span></div></div>
     </div>
@@ -177,7 +178,7 @@ function FeaturedProductsShowcase({ products }: { products: CmsProduct[] }) {
       <div className="container">
         <div className="projects-head">
           <SectionHeading eyebrow="Roofing products" title="Roofing profiles available from JILMEK." body="Explore the roofing options currently shown in the JILMEK catalog." />
-          <ButtonLink href="/services#roofing" variant="outline">View full catalog</ButtonLink>
+          <ButtonLink href="/roofing-products" variant="outline">View full catalog</ButtonLink>
         </div>
         <div className="roofing-type-grid">
           {items.map((product) => (
@@ -187,7 +188,7 @@ function FeaturedProductsShowcase({ products }: { products: CmsProduct[] }) {
                 <p className="eyebrow">{product.profile || "Roofing option"}</p>
                 <h3>{product.name}</h3>
                 <p>{product.description}</p>
-                <Link href="/services#roofing" className="text-link">Ask about this product <ArrowRight size={15} /></Link>
+                <Link href={`/roofing-products/${product.id}`} className="text-link">View product details <ArrowRight size={15} /></Link>
               </div>
             </article>
           ))}
@@ -204,7 +205,7 @@ function ListingsShowcase({ listings }: { listings: CmsListing[] }) {
       <div className="container">
         <div className="projects-head">
           <SectionHeading eyebrow="Current listings" title="Land and property opportunities." body="View the latest published listings, then contact JILMEK for confirmed details and next steps." />
-          <ButtonLink href="/contact#estimate" variant="outline">Ask about a listing</ButtonLink>
+          <ButtonLink href="/listings" variant="outline">View all listings</ButtonLink>
         </div>
         <div className="public-listing-grid">
           {listings.slice(0, 6).map((listing) => (
@@ -215,7 +216,7 @@ function ListingsShowcase({ listings }: { listings: CmsListing[] }) {
                 <h3>{listing.title}</h3>
                 <p className="public-listing-location">{listing.location}{listing.priceLabel ? ` · ${listing.priceLabel}` : ""}</p>
                 {listing.description && <p>{listing.description}</p>}
-                <Link href="/contact#estimate" className="text-link">Enquire about this listing <ArrowRight size={15} /></Link>
+                <Link href={`/listings/${listing.id}`} className="text-link">View listing details <ArrowRight size={15} /></Link>
               </div>
             </article>
           ))}
@@ -319,27 +320,20 @@ function About() {
 }
 
 function Services() {
-  const [cmsProducts, setCmsProducts] = useState(mockRoofingProducts.filter((product) => product.isPublished));
-  const [cmsListings, setCmsListings] = useState(mockPropertyListings.filter((listing) => listing.isPublished));
-  useEffect(() => {
-    listProducts().then(setCmsProducts).catch(() => undefined);
-    listListings().then(setCmsListings).catch(() => undefined);
-  }, []);
   useSeo({
     title: "Services — roofing sheets, construction, POP & finishing",
     description: "Long Span, Self-Lock, IBR, IDT, Euro Tiles and Stone Coated Shingles supply and installation, plus general building, POP ceilings, tiling, tinted glass and real estate services.",
     path: "/services",
   });
-  const displayRoofingTypes = cmsProducts.length ? cmsProducts.map((product) => [product.name, product.description, product.imageUrl || ASSETS.blueRoof]) : roofingTypes;
   return <>
     <PageHero kicker="Services" title="The right service for the next step." body="Roofing, building, finishing and property services for projects in Ghana and beyond." image={ASSETS.blueRoof}><ButtonLink href="/contact#estimate" variant="gold">Request a free estimate</ButtonLink></PageHero>
     <section className="section-pad"><div className="container"><SectionHeading eyebrow="01 — Service overview" title="Choose the next step that matches your project." body="Every major service area leads to a clear enquiry route. Start with the work you need and we will help define the scope." align="center" /><div className="service-directory"><a href="#roofing"><span>01</span><HomeIcon size={24} /><strong>Roofing</strong><p>Sheets, accessories and installation</p><ArrowRight /></a><a href="#construction"><span>02</span><Building2 size={24} /><strong>Construction</strong><p>Foundation to finishing</p><ArrowRight /></a><a href="#finishing"><span>03</span><Sparkles size={24} /><strong>Finishing</strong><p>POP, tiling, glass and details</p><ArrowRight /></a><a href="#real-estate"><span>04</span><Ruler size={24} /><strong>Real estate</strong><p>Land, property and development</p><ArrowRight /></a></div></div></section>
-    <section id="roofing" className="section-pad section-tint"><div className="container"><div className="anchor-title"><p className="section-number">02 — Roofing</p><SectionHeading eyebrow="Roofing sheet supply & installation" title="Roofing solutions built for your project." body="We supply and install a range of modern roofing sheets and provide the accessories and installation services needed for complete roofing projects." /><ButtonLink href="/contact#estimate">Request a roofing estimate</ButtonLink></div><div className="roofing-type-grid">{displayRoofingTypes.map(([name, body, image]) => <div className="roofing-type-card" key={name}><img src={image} alt={`${name} roofing project`} loading="lazy" /><div><p className="eyebrow">Roofing option</p><h3>{name}</h3><p>{body}</p><Link href="/contact#estimate" className="text-link">Enquire now <ArrowRight size={15} /></Link></div></div>)}</div></div></section>
+    <section id="roofing" className="section-pad section-tint"><div className="container"><div className="anchor-title"><p className="section-number">02 — Roofing</p><SectionHeading eyebrow="Roofing sheet supply & installation" title="Roofing solutions built for your project." body="We supply and install a range of modern roofing sheets and provide the accessories and installation services needed for complete roofing projects." /><div className="detail-actions"><ButtonLink href="/roofing-products" variant="gold">Browse roofing products</ButtonLink><ButtonLink href="/contact#estimate" variant="outline">Request a roofing estimate</ButtonLink></div></div></div></section>
     <section className="section-pad"><div className="container"><SectionHeading eyebrow="03 — Roofing materials" title="Aluminium vs MSL / Aluzinc" body="Use this comparison as a starting point, then talk to JILMEK about what makes sense for your project." align="center" /><div className="simple-table"><div className="table-head"><span>Aluminium</span><span>MSL / Aluzinc</span></div><div className="table-row"><span>Pure aluminium</span><span>Iron + zinc + aluminium coating</span></div><div className="table-row"><span>Does not rust</span><span>Strong and good quality</span></div><div className="table-row"><span>Very lightweight</span><span>Moderate price</span></div><div className="table-row"><span>Long-lasting</span><span>May rust after many years</span></div><div className="table-row"><span>More expensive</span><span>More affordable</span></div></div><div className="center-button"><ButtonLink href="/contact#estimate" variant="gold">Which option is right for you?</ButtonLink></div></div></section>
     <section id="construction" className="section-pad section-charcoal"><div className="container"><SectionHeading light eyebrow="04 — Construction" title="Building from foundation to finishing." body="General building and construction services for clients looking to develop their projects from foundation through finishing." /><div className="dark-service-grid">{[["General building", "Building from foundation to finishing.", ASSETS.frame], ["POP ceiling works", "Considered ceiling details for finished interiors.", ASSETS.colonnade], ["Tiling works", "Hard-wearing surfaces and clean finishing decisions.", ASSETS.greyHouse], ["Tinted glass works", "Glass details that shape the way a space feels.", ASSETS.tallHouse], ["Trusses & woodworks", "The supporting structure and crafted details.", ASSETS.roofFrame], ["Finishing works", "The final layer that completes the project.", ASSETS.pinkRoof]].map(([title, body, image]) => <div key={title} className="dark-service-card"><img src={image} alt={title} loading="lazy" /><div><h3>{title}</h3><p>{body}</p><Link href="/contact#estimate" className="text-link">Enquire now <ArrowRight size={15} /></Link></div></div>)}</div></div></section>
     <section id="finishing" className="section-pad section-tint"><div className="container split-layout"><div><p className="section-number">05 — Finishing</p><SectionHeading eyebrow="Finishing services" title="The work after the structure is what makes it yours." body="Bring together POP ceilings, tiling, tinted glass, trusses, woodworks and general finishing works through one clear scope." /><ButtonLink href="/contact#estimate">Discuss finishing works</ButtonLink></div><div className="split-image"><img className="main-image" src={ASSETS.colonnade} alt="Supplied project finishing detail" loading="lazy" /></div></div></section>
     <section id="real-estate" className="section-pad"><div className="container"><SectionHeading eyebrow="06 — Real estate" title="Land, property and building support." body="Beyond construction, JILMEK provides services for clients looking to buy, sell or develop land and property." align="center" /><div className="estate-service-grid"><div><span>01</span><h3>Land — Buy & Sell</h3><p>Information about available land opportunities can be added as the company provides it.</p><ButtonLink href="/contact#estimate" variant="outline">Enquire about land</ButtonLink></div><div><span>02</span><h3>Property sales</h3><p>We help clients sell their houses, buildings and properties.</p><ButtonLink href="/contact#estimate" variant="outline">Sell your property</ButtonLink></div><div><span>03</span><h3>Build on your own land</h3><p>Have your own land? We can help turn it into a completed building project.</p><ButtonLink href="/contact#estimate" variant="outline">Start your project</ButtonLink></div></div></div></section>
-    <ListingsShowcase listings={cmsListings} />
+    <section className="section-pad"><div className="container catalog-bridge"><div><p className="section-number">07 — Land & property</p><SectionHeading eyebrow="Dedicated listing catalogue" title="Review current opportunities on their own page." body="Keep property details easy to scan, then open a listing for its full description and enquiry path." /></div><div className="detail-actions"><ButtonLink href="/listings" variant="gold">Browse listings</ButtonLink><ButtonLink href="/contact#estimate" variant="outline">Ask about a property</ButtonLink></div></div></section>
 
     <section className="section-pad section-tint"><div className="container process-section"><div><p className="section-number">07 — How it works</p><SectionHeading eyebrow="A simple four-step process" title="Start with a conversation. Build from there." body="The exact scope will depend on your project. This is the straightforward path we use to begin." /></div><div className="process-list">{[["01", "Consultation", "Discuss your project requirements."], ["02", "Assessment", "Review the work and material requirements."], ["03", "Estimate", "Receive a project quotation."], ["04", "Work", "Proceed with the agreed roofing, construction or property work."]].map(([num, title, body]) => <div key={num}><span>{num}</span><div><h3>{title}</h3><p>{body}</p></div></div>)}</div></div></section>
     <section className="section-pad"><div className="container faq-mini"><SectionHeading eyebrow="08 — Common questions" title="A few useful starting points." body="Need more detail? Ask us directly and we will guide the next step." /><div className="faq-list"><FaqItem question="What roofing sheets do you supply?" answer="Long Span, Self-Lock, IBR, IDT, Euro Tiles / Aero Tiles and Stone Coated Shingles." /><FaqItem question="Do you offer estimates and consultations?" answer="Yes. Free consultations and free estimates / quotations are available." /><FaqItem question="Do you work outside Techiman?" answer="Yes. The company states that it undertakes projects across all 16 regions of Ghana and outside Ghana." /></div></div></section>
@@ -530,6 +524,10 @@ function App() {
             <Route path="/" component={Home} />
             <Route path="/about" component={About} />
             <Route path="/services" component={Services} />
+            <Route path="/roofing-products/:id" component={ProductDetail} />
+            <Route path="/roofing-products" component={ProductCatalog} />
+            <Route path="/listings/:id" component={ListingDetail} />
+            <Route path="/listings" component={ListingCatalog} />
             <Route path="/projects" component={Projects} />
             <Route path="/projects/:slug" component={ProjectDetail} />
             <Route path="/contact" component={Contact} />

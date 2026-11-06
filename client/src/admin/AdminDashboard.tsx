@@ -428,9 +428,8 @@ export default function AdminDashboard() {
           <TextArea label="Description" required value={editor.form.description}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, description: v } })}
             placeholder="A clear, factual description for customers." />
-          <Field label="Static site image path" value={editor.form.imageUrl}
-            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, imageUrl: v, imageKey: "" } })}
-            placeholder="/images/hero-red-roof_78e57ca6.jpeg" />
+          <MediaGalleryField label="Product image" imageUrl={editor.form.imageUrl} imageKey={editor.form.imageKey} media={media} onRefresh={refresh}
+            onSelect={(item) => setEditor({ ...editor, form: { ...editor.form, imageUrl: item.url, imageKey: item.key } })} />
           <Field label="Sort order" type="number" value={String(editor.form.sortOrder)}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, sortOrder: Number(v) || 0 } })} />
           <Check label="Published on website" checked={editor.form.isPublished}
@@ -473,9 +472,8 @@ export default function AdminDashboard() {
           <TextArea label="Description" required value={editor.form.description}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, description: v } })}
             placeholder="A clear, factual description for the listing." />
-          <Field label="Static site image path" value={editor.form.imageUrl}
-            onChange={(v) => setEditor({ ...editor, form: { ...editor.form, imageUrl: v, imageKey: "" } })}
-            placeholder="/images/house-grey_2ed75e58.jpeg" />
+          <MediaGalleryField label="Listing image" imageUrl={editor.form.imageUrl} imageKey={editor.form.imageKey} media={media} onRefresh={refresh}
+            onSelect={(item) => setEditor({ ...editor, form: { ...editor.form, imageUrl: item.url, imageKey: item.key } })} />
           <Check label="Published on website" checked={editor.form.isPublished}
             onChange={(v) => setEditor({ ...editor, form: { ...editor.form, isPublished: v } })} />
           <Check label="Mark as featured" checked={editor.form.isFeatured}
@@ -963,6 +961,31 @@ function MediaPicker({
 }
 
 /* ----------------------------------------------------------- enquiries tab */
+
+function MediaGalleryField({
+  label, imageUrl, imageKey, media, onSelect, onRefresh,
+}: {
+  label: string;
+  imageUrl: string;
+  imageKey: string;
+  media: MediaItem[];
+  onSelect: (item: MediaItem) => void;
+  onRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="adm-media-field">
+      <div className="adm-field-label">{label}</div>
+      {imageUrl && <img className="adm-editor-image" src={imageUrl} alt="Selected product or listing" />}
+      <div className="adm-media-field-actions">
+        <button type="button" className="adm-secondary" onClick={() => setOpen(true)}><ImageIcon size={16} /> {imageKey ? "Change gallery image" : "Choose or upload image"}</button>
+        {imageUrl && <button type="button" className="adm-secondary" onClick={() => onSelect({ key: "", url: "", filename: "", sizeKb: 0, uploadedAt: "" })}>Remove image</button>}
+      </div>
+      <small className="adm-muted">Images are uploaded through Media Gallery and saved with their media key. Do not paste a static site path.</small>
+      {open && <MediaPicker media={media} onClose={() => setOpen(false)} onUploaded={onRefresh} onSelect={(item) => { onSelect(item); setOpen(false); }} />}
+    </div>
+  );
+}
 
 function EnquiriesTab({
   enquiries, testimonials, onOpen, onNewTestimonial, onEditTestimonial, onDeleteTestimonial,
